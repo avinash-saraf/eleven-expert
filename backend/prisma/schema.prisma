@@ -1,0 +1,139 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum SessionMode {
+  LEARN
+  TEACH
+}
+
+enum UserRole {
+  EXPERT
+  EMPLOYEE
+}
+
+enum WorkflowStatus {
+  DRAFT
+  READY
+}
+
+model Organization {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String
+  nameKey   String    @unique
+  createdAt DateTime  @default(now())
+  users     User[]
+  workflows WorkMap[]
+}
+
+model User {
+  id             String            @id @default(uuid()) @db.Uuid
+  name           String
+  nameKey        String
+  role           UserRole
+  organizationId String            @db.Uuid
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdAt      DateTime          @default(now())
+  accessTokens   DemoAccessToken[]
+  workflows      WorkMap[]
+  sessions       Session[]
+
+  @@unique([organizationId, nameKey, role])
+}
+
+model DemoAccessToken {
+  tokenHash String   @id @db.Char(64)
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+enum SessionStatus {
+  CREATING
+  JOINING
+  WAITING_ROOM
+  IN_CALL
+  RECORDING
+  STOPPING
+  ENDED
+  COMPLETED
+  FAILED
+}
+
+model WorkMap {
+  id             String         @id @default(uuid()) @db.Uuid
+  title          String
+  definition     Json           @default("{}")
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  sessions       Session[]
+  status         WorkflowStatus @default(DRAFT)
+  organizationId String?        @db.Uuid
+  organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdById    String?        @db.Uuid
+  createdBy      User?          @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, status])
+  @@index([createdById])
+}
+
+model Session {
+  id                 String         @id @default(uuid()) @db.Uuid
+  meetingUrl         String
+  mode               SessionMode
+  status             SessionStatus  @default(CREATING)
+  requestKey         String?        @unique
+  requestFingerprint String?
+  recallBotId        String?        @unique
+  recallStatus       String?
+  lastRecallEventAt  DateTime?
+  stopRequestedAt    DateTime?
+  error              String?
+  workMapId          String         @db.Uuid
+  workMap            WorkMap        @relation(fields: [workMapId], references: [id], onDelete: Restrict)
+  events             SessionEvent[]
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  userId             String?        @db.Uuid
+  user               User?          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  mediaStreamId      String?        @unique @db.Uuid
+
+  @@index([workMapId])
+  @@index([userId])
+}
+
+model SessionEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  sessionId  String   @db.Uuid
+  session    Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  deliveryId String   @unique
+  type       String
+  payload    Json
+  occurredAt DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([sessionId, occurredAt])
+}
+
+model RecallWebhookDelivery {
+  id            String    @id
+  payload       Json
+  receivedAt    DateTime  @default(now())
+  processedAt   DateTime?
+  lockedUntil   DateTime?
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now())
+  lastError     String?
+
+  @@index([processedAt, nextAttemptAt])
+}

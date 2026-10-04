@@ -1,0 +1,33 @@
+# Dependencies anywhere in backend, frontend, or other packages
+node_modules/
+
+# Builds, coverage, and generated Prisma client
+dist/
+build/
+coverage/
+.nyc_output/
+*.tsbuildinfo
+/backend/src/generated/prisma/
+
+# Local environment and deployment credentials
+.env
+.env.*
+!.env.example
+/backend/.env.example
+/deploy/production.env
+
+# Google Meet SSO certificate and private key
+google-meet-sso-cert.pem
+google-meet-sso-key.pem
+
+# Database backups
+*.dump
+/deploy/*.sql
+
+# Logs and local machine files
+*.log
+.DS_Store
+.idea/
+
+# Preserved Git metadata from repositories imported into this root repository
+/.git-repository-backups/

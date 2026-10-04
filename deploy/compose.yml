@@ -1,0 +1,99 @@
+name: eleven-expert-production
+
+x-database-environment: &database-environment
+  DATABASE_URL: postgresql://${POSTGRES_USER:-eleven_expert}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-eleven_expert}?schema=public
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-eleven_expert}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-eleven_expert}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  migrate:
+    build:
+      context: ../backend
+      target: build
+    restart: 'no'
+    environment: *database-environment
+    command: ['npm', 'run', 'prisma:deploy']
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: ../backend
+      target: runtime
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 45s
+    ports:
+      - '127.0.0.1:${BACKEND_PORT:-3300}:3000'
+    environment:
+      <<: *database-environment
+      NODE_ENV: production
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://meets.sellmate.kz}
+      SESSION_API_KEY: ${SESSION_API_KEY:-}
+      RECALL_REGION: ${RECALL_REGION:?Set RECALL_REGION}
+      RECALL_API_KEY: ${RECALL_API_KEY:?Set RECALL_API_KEY}
+      GOOGLE_LOGIN_GROUP_ID: ${GOOGLE_LOGIN_GROUP_ID:?Set GOOGLE_LOGIN_GROUP_ID}
+      RECALL_PUBLIC_WEBSOCKET_URL: ${RECALL_PUBLIC_WEBSOCKET_URL:-wss://api-meets.sellmate.kz/recall/media/}
+      RECALL_WORKSPACE_VERIFICATION_SECRET: ${RECALL_WORKSPACE_VERIFICATION_SECRET:-}
+      RECALL_SVIX_WEBHOOK_SECRET: ${RECALL_SVIX_WEBHOOK_SECRET:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?Set ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5-5}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:?Set ELEVENLABS_API_KEY}
+      ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID:-JBFqnCBsd6RMkjVDRZzb}
+      ELEVENLABS_TTS_MODEL: ${ELEVENLABS_TTS_MODEL:-eleven_flash_v2_5}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ../frontend/web
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-https://api-meets.sellmate.kz}
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:${FRONTEND_PORT:-8080}:80'
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1/healthz']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ['tunnel']
+    restart: unless-stopped
+    command: ['tunnel', '--no-autoupdate', 'run']
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
