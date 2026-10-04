@@ -1,9 +1,18 @@
 import { useState } from 'react'
-import { useWorkflowQuery } from './api.js'
+import {
+  errorMessage,
+  useRebuildGraphMutation,
+  useWorkflowQuery,
+} from './api.js'
+import MomentImage from './MomentImage.jsx'
+import WorkGraph, { graphCounts } from './WorkGraph.jsx'
+import GraphDetail from './GraphDetail.jsx'
+import ExportButtons from './ExportButtons.jsx'
 import {
   ErrorNotice,
   Loading,
   buttonClass,
+  clock,
   secondaryClass,
   knowledgeOf,
   statusLabel,
@@ -24,6 +33,9 @@ export default function WorkMap({ workflowId, user, go }) {
     skipPollingIfUnfocused: true,
   })
   const [selection, setSelection] = useState(null)
+  const [graphSelection, setGraphSelection] = useState(null)
+  const [view, setView] = useState('graph')
+  const [rebuild, rebuilding] = useRebuildGraphMutation()
   if (query.isLoading) return <Loading>Loading the Work Map…</Loading>
   if (query.error)
     return (
@@ -35,6 +47,12 @@ export default function WorkMap({ workflowId, user, go }) {
   const knowledge = knowledgeOf(w)
   const node = knowledge.find((item) => item.id === selection) || knowledge[0]
   const expert = user.role === 'expert'
+  const graph = w.definition?.apprentice?.graph
+  const hasGraph = graph?.nodes?.length > 0
+  const showGraph = hasGraph && view === 'graph'
+  const graphNode =
+    graph?.nodes.find((n) => n.id === graphSelection) || graph?.nodes[0]
+  const counts = hasGraph && graphCounts(graph)
   return (
     <div className="grid min-h-full lg:grid-cols-[1fr_360px]">
       <section className="flex min-w-0 flex-col">
@@ -70,7 +88,75 @@ export default function WorkMap({ workflowId, user, go }) {
             </p>
           </div>
         )}
-        <div className="flex-1 space-y-3 p-5">
+        {hasGraph && (
+          <div className="space-y-3 px-5 pt-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="font-medium">
+                  {counts.steps} steps · {counts.decisions} judgment calls ·{' '}
+                  {counts.guardrails} guardrails
+                </span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs ${graph.status === 'confirmed' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800'}`}
+                >
+                  {graph.status === 'confirmed'
+                    ? 'Confirmed by the expert'
+                    : 'Draft · updates as the expert teaches'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {['graph', 'list'].map((name) => (
+                  <button
+                    key={name}
+                    onClick={() => setView(name)}
+                    className={`rounded-full border px-3 py-1 text-xs capitalize ${view === name ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-line hover:bg-zinc-100'}`}
+                  >
+                    {name}
+                  </button>
+                ))}
+                <ExportButtons workflowId={workflowId} />
+                {expert && (
+                  <button
+                    className={secondaryClass}
+                    disabled={rebuilding.isLoading}
+                    onClick={() => rebuild(workflowId)}
+                  >
+                    {rebuilding.isLoading ? 'Rebuilding…' : 'Rebuild graph'}
+                  </button>
+                )}
+              </div>
+            </div>
+            {rebuilding.error && (
+              <p className="text-xs text-red-700">
+                {errorMessage(rebuilding.error)}
+              </p>
+            )}
+            {showGraph && (
+              <WorkGraph
+                graph={graph}
+                selectedId={graphNode?.id}
+                onSelect={setGraphSelection}
+              />
+            )}
+          </div>
+        )}
+        {!hasGraph && expert && knowledge.length >= 2 && (
+          <div className="px-5 pt-5">
+            <button
+              className={secondaryClass}
+              disabled={rebuilding.isLoading}
+              onClick={() => rebuild(workflowId)}
+            >
+              {rebuilding.isLoading ? 'Building…' : 'Build the graph'}
+            </button>
+            {rebuilding.error && (
+              <p className="mt-2 text-xs text-red-700">
+                {errorMessage(rebuilding.error)}
+              </p>
+            )}
+          </div>
+        )}
+        <div className={`flex-1 space-y-3 p-5 ${showGraph ? 'hidden' : ''}`}>
           {!knowledge.length ? (
             <div className="rounded-2xl border border-dashed border-line p-8 text-center text-sm text-zinc-500">
               {w.definition && Object.keys(w.definition).length
@@ -93,6 +179,11 @@ export default function WorkMap({ workflowId, user, go }) {
                   >
                     {item.kind}
                   </span>
+                  {item.moment && (
+                    <span className="ml-2 text-xs text-zinc-500">
+                      ▶ Screen {clock(item.moment.offsetSeconds)}
+                    </span>
+                  )}
                   <span className="mt-2 block text-sm leading-relaxed">
                     {item.statement}
                   </span>
@@ -116,8 +207,16 @@ export default function WorkMap({ workflowId, user, go }) {
         </p>
       </section>
       <aside className="border-t border-line p-5 lg:border-l lg:border-t-0">
-        <h2 className="text-sm font-semibold">Knowledge evidence</h2>
-        {node ? (
+        <h2 className="text-sm font-semibold">
+          {showGraph ? 'Step details' : 'Knowledge evidence'}
+        </h2>
+        {showGraph && graphNode ? (
+          <GraphDetail
+            workflowId={workflowId}
+            node={graphNode}
+            knowledge={knowledge}
+          />
+        ) : node ? (
           <>
             <div
               className={`mt-4 inline-block rounded-full px-2 py-0.5 text-xs capitalize ${tones[node.kind] || tones.step}`}
@@ -125,6 +224,15 @@ export default function WorkMap({ workflowId, user, go }) {
               {node.kind}
             </div>
             <p className="mt-3 text-sm leading-relaxed">{node.statement}</p>
+            {node.moment && (
+              <figure className="mt-4">
+                <MomentImage workflowId={workflowId} moment={node.moment} />
+                <figcaption className="mt-2 text-xs text-zinc-500">
+                  Screen moment {clock(node.moment.offsetSeconds)} ·{' '}
+                  {node.moment.caption}
+                </figcaption>
+              </figure>
+            )}
             <div className="mt-5 space-y-3">
               {(node.evidence || []).map((e, i) => (
                 <figure

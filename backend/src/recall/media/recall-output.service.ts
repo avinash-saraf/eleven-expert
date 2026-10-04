@@ -13,7 +13,7 @@ export interface OutputSocket extends EventEmitter {
 export class RecallOutputService implements OnModuleDestroy {
   private readonly players = new Map<
     string,
-    { socket: OutputSocket; ready: boolean }
+    { socket: OutputSocket; ready: boolean; agentRate?: number }
   >();
 
   attach(streamId: string, socket: OutputSocket) {
@@ -116,6 +116,56 @@ export class RecallOutputService implements OnModuleDestroy {
       socket.removeListener('close', closed);
       signal.removeEventListener('abort', abort);
     }
+  }
+
+  /**
+   * Continuous playback for a live ElevenAgents conversation. The agent streams audio
+   * faster than real time, so chunks are queued on the page and only `cancel` (an
+   * interruption) clears them.
+   */
+  streamAgentAudio(streamId: string, pcm: Buffer, sampleRate: number) {
+    const player = this.players.get(streamId);
+    if (!player || !this.isReady(streamId) || !pcm.length) return;
+    const socket = player.socket;
+    if (socket.bufferedAmount > 512 * 1024) return;
+    const aligned = pcm.subarray(0, pcm.length - (pcm.length % 2));
+    if (!aligned.length) return;
+    if (player.agentRate !== sampleRate) {
+      player.agentRate = sampleRate;
+      socket.send(JSON.stringify({ type: 'agent_stream', sampleRate }));
+    }
+    socket.send(aligned);
+  }
+
+  /** Shows a picture on the bot's camera tile in the meeting, then fades back by itself. */
+  showImage(
+    streamId: string,
+    image: {
+      jpeg: Buffer;
+      caption: string;
+      quote?: string | null;
+      seconds?: number;
+    },
+  ) {
+    const socket = this.players.get(streamId)?.socket;
+    if (socket?.readyState !== 1 || socket.bufferedAmount > 2 * 1024 * 1024)
+      return false;
+    socket.send(
+      JSON.stringify({
+        type: 'show',
+        mime: 'image/jpeg',
+        data: image.jpeg.toString('base64'),
+        caption: image.caption.slice(0, 200),
+        quote: image.quote?.slice(0, 240) ?? '',
+        seconds: image.seconds ?? 20,
+      }),
+    );
+    return true;
+  }
+
+  hideImage(streamId: string) {
+    const socket = this.players.get(streamId)?.socket;
+    if (socket?.readyState === 1) socket.send(JSON.stringify({ type: 'hide' }));
   }
 
   cancel(streamId: string) {

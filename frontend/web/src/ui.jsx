@@ -54,3 +54,5 @@ export function knowledgeOf(workflow) {
   const items = workflow?.definition?.apprentice?.knowledge
   return Array.isArray(items) ? items : []
 }
+export const clock = (seconds = 0) =>
+  `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`

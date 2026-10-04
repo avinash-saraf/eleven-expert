@@ -1,4 +1,6 @@
 import {
+  ConflictException,
+  ForbiddenException,
   Body,
   Controller,
   Get,
@@ -8,14 +10,22 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import { UserRole } from '../generated/prisma/enums';
+import type { Response } from 'express';
 import { CurrentUser, DemoIdentity } from '../auth/demo-identity';
 import { DemoAuthGuard } from '../auth/demo-auth.guard';
 import { JoinMeetingDto } from '../meetings/dto/join-meeting.dto';
 import { CreateWorkflowDto } from './dto/create-workflow.dto';
 import { WorkflowsService } from './workflows.service';
 import { WorkflowSessionsService } from './workflow-sessions.service';
+import { GraphService } from '../learn/graph.service';
+import {
+  exportInstructionsJson,
+  exportInstructionsMarkdown,
+} from '../learn/export-instructions';
 import { SessionEventsQueryDto } from './dto/session-events-query.dto';
 
 @Controller('workflows')
@@ -24,6 +34,7 @@ export class WorkflowsController {
   constructor(
     private readonly workflows: WorkflowsService,
     private readonly sessions: WorkflowSessionsService,
+    private readonly graphs: GraphService,
   ) {}
 
   @Post()
@@ -42,6 +53,46 @@ export class WorkflowsController {
     @CurrentUser() user: DemoIdentity,
   ) {
     return this.workflows.get(id, user);
+  }
+
+  // Rebuilds the graph from saved knowledge, e.g. after an edit or a failed live build.
+  @Post(':workflowId/graph/rebuild')
+  @HttpCode(200)
+  async rebuildGraph(
+    @Param('workflowId', ParseUUIDPipe) id: string,
+    @CurrentUser() user: DemoIdentity,
+  ) {
+    if (user.role !== UserRole.EXPERT)
+      throw new ForbiddenException('Only experts can rebuild the graph');
+    const workflow = await this.workflows.get(id, user);
+    const previous = (workflow.definition as any)?.apprentice?.graph;
+    const graph = await this.graphs.build(id, {
+      status: previous?.status === 'confirmed' ? 'confirmed' : 'draft',
+    });
+    if (!graph)
+      throw new ConflictException('No saved knowledge to build a graph from');
+    return graph;
+  }
+
+  // The Work Map as instructions an agent can load. ?format=json returns structured steps.
+  @Get(':workflowId/export')
+  async exportInstructions(
+    @Param('workflowId', ParseUUIDPipe) id: string,
+    @Query('format') format: string | undefined,
+    @CurrentUser() user: DemoIdentity,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const workflow = await this.workflows.get(id, user);
+    const result =
+      format === 'json'
+        ? exportInstructionsJson(workflow.title, workflow.definition)
+        : exportInstructionsMarkdown(workflow.title, workflow.definition);
+    if (!result)
+      throw new ConflictException('This Work Map has no graph to export yet');
+    // Expert-supplied text must never be served as HTML.
+    if (typeof result === 'string') res.type('text/plain; charset=utf-8');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    return result;
   }
 
   @Post(':workflowId/sessions')

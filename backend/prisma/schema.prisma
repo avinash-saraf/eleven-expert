@@ -77,6 +77,7 @@ model WorkMap {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   sessions       Session[]
+  moments        ScreenMoment[]
   status         WorkflowStatus @default(DRAFT)
   organizationId String?        @db.Uuid
   organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
@@ -102,6 +103,7 @@ model Session {
   workMapId          String         @db.Uuid
   workMap            WorkMap        @relation(fields: [workMapId], references: [id], onDelete: Restrict)
   events             SessionEvent[]
+  moments            ScreenMoment[]
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
   userId             String?        @db.Uuid
@@ -136,4 +138,21 @@ model RecallWebhookDelivery {
   lastError     String?
 
   @@index([processedAt, nextAttemptAt])
+}
+
+// A downscaled frame of the shared screen, linked from Work Map knowledge.
+model ScreenMoment {
+  id            String   @id @default(uuid()) @db.Uuid
+  sessionId     String   @db.Uuid
+  session       Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  workMapId     String   @db.Uuid
+  workMap       WorkMap  @relation(fields: [workMapId], references: [id], onDelete: Cascade)
+  occurredAt    DateTime
+  offsetSeconds Int
+  caption       String
+  image         Bytes
+  createdAt     DateTime @default(now())
+
+  @@index([workMapId, occurredAt])
+  @@index([sessionId, occurredAt])
 }

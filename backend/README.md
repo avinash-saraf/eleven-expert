@@ -259,18 +259,24 @@ Add these credentials to your existing `.env`, then restart the backend:
 ```dotenv
 ANTHROPIC_API_KEY=<anthropic-key>
 ELEVENLABS_API_KEY=<elevenlabs-key>
+ELEVENLABS_LEARN_AGENT_ID=<from npm run agents:create>
+ELEVENLABS_TEACH_AGENT_ID=<from npm run agents:create>
 # Optional overrides:
-ELEVENLABS_VOICE_ID=JBFqnCBsd6RMkjVDRZzb
 ANTHROPIC_MODEL=claude-sonnet-5-5
-ELEVENLABS_TTS_MODEL=eleven_flash_v2_5
+ELEVENLABS_AGENT_LLM=claude-sonnet-4-5
+ELEVENLABS_VOICE_ID=
 ```
 
-The ElevenLabs key needs realtime Scribe transcription and text-to-speech access.
-`ELEVENLABS_VOICE_ID` selects the speaking voice; it is separate from API-key
-permissions. When omitted or blank, the backend uses `JBFqnCBsd6RMkjVDRZzb`, the
-voice in ElevenLabs' [streaming example](https://elevenlabs.io/docs/api-reference/text-to-speech/stream).
-If your key is restricted to particular voices, set the ID of an allowed voice
-from your ElevenLabs account and restart the backend.
+The voice is an **ElevenAgents** conversation (interviewer in Learn mode, tutor in
+Teach mode), which handles turn-taking, interruptions and speech, using Scribe
+realtime for listening and Expressive Mode for the voice. Run
+`ELEVENLABS_API_KEY=... npm run agents:create` once and copy the two printed IDs
+into `.env`. The prompts are sent per session from `src/learn/agent-prompts.ts`.
+Claude runs silently beside the conversation: it turns screen frames into events
+and Work Map knowledge, and pushes them to the agent as background context.
+In Learn mode the expert can say "off the record" to pause transcripts and frames;
+the agent can start a debrief with a teach-back when the task is done.
+`ELEVENLABS_VOICE_ID` optionally overrides the agent's configured voice.
 The existing `RECALL_PUBLIC_WEBSOCKET_URL` supplies the public hostname for both
 input media and the bot's playback page. Your tunnel must forward HTTP and
 WebSocket requests for `/recall/output/` as well as `/recall/media/`.

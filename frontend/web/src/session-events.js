@@ -52,7 +52,11 @@ export function displayEvent(event) {
   const p = event.payload || {}
   const type = event.type
   if (type === 'apprentice.transcript')
-    return { who: p.participantName || 'You', text: p.text, category: 'Speech' }
+    return {
+      who: p.participantName || 'You',
+      text: p.text,
+      category: 'Speech',
+    }
   if (type === 'apprentice.question')
     return {
       who: 'Ari',
@@ -68,6 +72,49 @@ export function displayEvent(event) {
       text: p.question,
       category: 'Voice failed',
       failed: true,
+    }
+  if (type === 'apprentice.agent_said')
+    return {
+      who: 'Ari',
+      text: p.text,
+      category:
+        p.phase === 'debrief'
+          ? 'Debrief'
+          : p.phase === 'done'
+            ? 'Wrap-up'
+            : 'Conversation',
+    }
+  if (type === 'apprentice.teach.alert')
+    return { who: 'Ari', text: p.alert, category: 'correction' }
+  if (type === 'apprentice.teach.replay')
+    return {
+      who: 'Ari',
+      text: `Showing the expert’s screen: ${p.caption}`,
+      category: 'Replay',
+    }
+  if (type === 'apprentice.screen_event')
+    return { who: 'Screen', text: p.text, category: 'Screen' }
+  if (type === 'apprentice.off_record')
+    return {
+      who: 'Ari',
+      text: p.active
+        ? 'Off the record. Nothing is being saved.'
+        : 'Back on the record.',
+      category: 'Privacy',
+    }
+  if (type === 'apprentice.debrief.teachback')
+    return {
+      who: 'Ari',
+      text: p.confirmed
+        ? 'The expert confirmed the teach-back.'
+        : 'The teach-back was not confirmed yet.',
+      category: 'Teach-back',
+    }
+  if (type === 'apprentice.teach.lesson')
+    return {
+      who: 'Ari',
+      text: `Mastered: ${(p.mastered || []).join('; ') || 'nothing yet'}. Practice next: ${(p.practice || []).join('; ') || 'nothing'}.`,
+      category: 'Lesson result',
     }
   if (type === 'apprentice.knowledge')
     return { who: 'Work Map', text: p.statement, category: p.kind }

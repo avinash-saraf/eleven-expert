@@ -1,8 +1,12 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
 import { signedOut } from './auth.js'
 
+export const apiBase = (import.meta.env.VITE_API_BASE_URL || '/api').replace(
+  /\/$/,
+  '',
+)
 const rawBaseQuery = fetchBaseQuery({
-  baseUrl: (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, ''),
+  baseUrl: apiBase,
   timeout: 45000,
   prepareHeaders: (headers, { getState, endpoint }) => {
     const token = getState().auth.accessToken
@@ -53,6 +57,10 @@ export const apprenticeApi = createApi({
         body: { title },
       }),
       invalidatesTags: [{ type: 'Workflow', id: 'LIST' }],
+    }),
+    rebuildGraph: build.mutation({
+      query: (id) => ({ url: `workflows/${id}/graph/rebuild`, method: 'POST' }),
+      invalidatesTags: (_, __, id) => [{ type: 'Workflow', id }],
     }),
     sessions: build.query({
       query: (workflowId) => `workflows/${workflowId}/sessions`,
@@ -109,6 +117,7 @@ export const {
   useWorkflowsQuery,
   useWorkflowQuery,
   useCreateWorkflowMutation,
+  useRebuildGraphMutation,
   useSessionsQuery,
   useSessionQuery,
   useCreateSessionMutation,

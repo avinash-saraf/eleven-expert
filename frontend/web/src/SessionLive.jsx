@@ -18,6 +18,16 @@ import {
 import { useSessionEvents, visibleEvents } from './session-events.js'
 import InviteCard from './InviteCard.jsx'
 import Face from './Face.jsx'
+import ExpertReplay from './ExpertReplay.jsx'
+import WorkGraph from './WorkGraph.jsx'
+import {
+  ActivityChip,
+  DebriefChecklist,
+  LatencyPanel,
+  Mastery,
+  PrivacyPanel,
+  QuestionLog,
+} from './ApprenticeEvidence.jsx'
 
 export default function SessionLive({ workflowId, sessionId, user, go }) {
   const args = { workflowId, sessionId }
@@ -36,6 +46,9 @@ export default function SessionLive({ workflowId, sessionId, user, go }) {
   const [stopRequested, setStopRequested] = useState(false)
   const end = useRef(null)
   const events = visibleEvents(feed.items)
+  const lesson = [...feed.items]
+    .reverse()
+    .find((e) => e.type === 'apprentice.teach.lesson')?.payload
   useEffect(() => {
     end.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [feed.items.length])
@@ -66,6 +79,7 @@ export default function SessionLive({ workflowId, sessionId, user, go }) {
   const s = session.data
   const w = workflow.data
   const a = apprentice.data
+  const graph = w?.definition?.apprentice?.graph
   const finished = isTerminal(s.status) || a?.finalized || stopRequested
   const joined =
     ['IN_CALL', 'RECORDING'].includes(s.status) || !!media.data?.connections
@@ -180,6 +194,54 @@ export default function SessionLive({ workflowId, sessionId, user, go }) {
               </div>
             </div>
           </div>
+        )}
+        {(joined || finished) && a?.active && (
+          <div className="flex flex-wrap items-center gap-3">
+            <ActivityChip activity={a?.activity} />
+            <LatencyPanel latency={a?.latency} />
+          </div>
+        )}
+        {teach && graph?.nodes?.length > 0 && (
+          <WorkGraph
+            graph={graph}
+            currentId={a?.currentStep}
+            outcomes={a?.outcomes}
+            height="h-[300px]"
+          />
+        )}
+        {teach && <Mastery graph={graph} outcomes={a?.outcomes} />}
+        {!teach && (
+          <>
+            <QuestionLog questions={a?.questions} />
+            <DebriefChecklist debrief={a?.debrief} phase={a?.phase} />
+          </>
+        )}
+        <PrivacyPanel privacy={a?.privacy} offRecord={a?.offRecord} />
+        {teach && <ExpertReplay workflowId={workflowId} replay={a?.replay} />}
+        {teach && lesson && (
+          <section className="rounded-2xl border border-line bg-panel p-4">
+            <h2 className="text-xs font-medium uppercase tracking-wider text-zinc-500">
+              Your lesson result
+            </h2>
+            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              <div>
+                <h3 className="text-sm font-semibold">Mastered</h3>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                  {(lesson.mastered || []).map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold">Practice next</h3>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+                  {(lesson.practice || []).map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </section>
         )}
         {a?.pendingQuestion && (
           <section className="rounded-2xl border border-glow/40 bg-glow/5 p-4">

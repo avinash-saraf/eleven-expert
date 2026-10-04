@@ -26,12 +26,18 @@ export default function LearnerSummary({ workflowId, sessionId, user, go }) {
   const summary = [...feed.items]
     .reverse()
     .find((e) => e.type === 'apprentice.teach.summary')?.payload
-  const delivered = feed.items.filter(
-    (e) => e.type === 'apprentice.teach.speech_delivered',
+  const corrections = feed.items.filter(
+    (e) => e.type === 'apprentice.teach.alert',
   )
-  const corrections = delivered.filter(
-    (e) => e.payload?.category === 'correction',
-  )
+  const delivered = feed.items
+    .filter((e) => e.type === 'apprentice.agent_said')
+    .map((e) => ({
+      ...e,
+      payload: { category: e.payload.phase, speech: e.payload.text },
+    }))
+  const lesson = [...feed.items]
+    .reverse()
+    .find((e) => e.type === 'apprentice.teach.lesson')?.payload
   const facts = feed.items.filter((e) => e.type === 'apprentice.knowledge')
   const context =
     summary?.context ||
@@ -90,6 +96,22 @@ export default function LearnerSummary({ workflowId, sessionId, user, go }) {
           </div>
         ))}
       </div>
+      {teach && lesson && (
+        <section className="rounded-2xl border border-line bg-panel p-5">
+          <h2 className="text-sm font-semibold">What you have mastered</h2>
+          <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
+            {(lesson.mastered || []).map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+          <h2 className="mt-5 text-sm font-semibold">Practice next</h2>
+          <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
+            {(lesson.practice || []).map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </section>
+      )}
       {context && (
         <section className="rounded-2xl border border-line bg-panel p-5">
           <h2 className="text-sm font-semibold">
