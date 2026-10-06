@@ -91,7 +91,8 @@ function Workspace({ user, onSignOut }) {
     page = (
       <NewSession
         key={route.workflowId || 'new'}
-        workflowId={route.workflowId}
+        workflowId={route.workflowId?.startsWith('process:') ? undefined : route.workflowId}
+        processId={route.workflowId?.startsWith('process:') ? route.workflowId.slice(8) : undefined}
         onCreated={live}
         go={go}
       />

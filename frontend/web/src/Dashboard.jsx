@@ -9,6 +9,7 @@ import {
   isTerminal,
 } from './ui.jsx'
 import Face from './Face.jsx'
+import KnowledgeAtRisk from './KnowledgeAtRisk.jsx'
 
 function Stat({ label, value, hint }) {
   return (
@@ -68,24 +69,28 @@ export default function Dashboard({ user, go }) {
           )}
         </div>
       </div>
-      <section className="flex flex-wrap items-center justify-between gap-6 rounded-3xl bg-zinc-900 p-6 text-white md:p-8">
-        <div className="max-w-xl">
-          <div className="text-xs uppercase tracking-[0.2em] text-zinc-400">
-            {user.organization.name}
+      {expert ? (
+        <KnowledgeAtRisk workflows={workflows} user={user} go={go} />
+      ) : (
+        <section className="flex flex-wrap items-center justify-between gap-6 rounded-3xl bg-zinc-900 p-6 text-white md:p-8">
+          <div className="max-w-xl">
+            <div className="text-xs uppercase tracking-[0.2em] text-zinc-400">
+              {user.organization.name}
+            </div>
+            <h2 className="mt-3 text-2xl font-semibold">
+              {expert
+                ? 'Your experience becomes the team’s knowledge.'
+                : 'An expert coworker, inside your Google Meet.'}
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-zinc-300">
+              {expert
+                ? 'Share your screen, explain your decisions, and answer Ari’s questions. Learned knowledge is saved throughout the call and made available when the session finishes.'
+                : 'Ari watches your shared screen, listens to your questions, and coaches you using your expert’s saved knowledge. Ask it to explain in your language.'}
+            </p>
           </div>
-          <h2 className="mt-3 text-2xl font-semibold">
-            {expert
-              ? 'Your experience becomes the team’s knowledge.'
-              : 'An expert coworker, inside your Google Meet.'}
-          </h2>
-          <p className="mt-3 text-sm leading-relaxed text-zinc-300">
-            {expert
-              ? 'Share your screen, explain your decisions, and answer Ari’s questions. Learned knowledge is saved throughout the call and made available when the session finishes.'
-              : 'Ari watches your shared screen, listens to your questions, and coaches you using your expert’s saved knowledge. Ask it to explain in your language.'}
-          </p>
-        </div>
-        <Face state="idle" size={110} />
-      </section>
+          <Face state="idle" size={110} />
+        </section>
+      )}
       <ErrorNotice error={error} retry={refetch} />
       {isLoading ? (
         <Loading>Loading workflows…</Loading>

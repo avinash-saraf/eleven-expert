@@ -12,10 +12,11 @@ import {
   secondaryClass,
   MEET,
 } from './ui.jsx'
+import { linkProcess, processById } from './knowledge.js'
 
-export default function NewSession({ workflowId, onCreated, go }) {
+export default function NewSession({ workflowId, processId, onCreated, go }) {
   const existing = useWorkflowQuery(workflowId, { skip: !workflowId })
-  const [title, setTitle] = useState('')
+  const [title, setTitle] = useState(() => processById(processId)?.name || '')
   const [meetingUrl, setMeetingUrl] = useState('')
   const [consent, setConsent] = useState(false)
   const [createdWorkflow, setCreatedWorkflow] = useState(null)
@@ -37,6 +38,7 @@ export default function NewSession({ workflowId, onCreated, go }) {
         ? { id: selected }
         : await createWorkflow({ title: title.trim() }).unwrap()
       setCreatedWorkflow(workflow)
+      if (processId) linkProcess(workflow.id, processId)
       const fingerprint = `${workflow.id}:${meetingUrl.trim()}`
       if (request.current?.fingerprint !== fingerprint)
         request.current = { fingerprint, key: crypto.randomUUID() }
